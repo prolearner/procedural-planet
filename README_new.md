@@ -1,5 +1,6 @@
 #3D Procedural Planet WebGL
 - - -
+[Imgur](http://i.imgur.com/3MAGabc.jpg)
 ###[Try the Demo!](https://prolearner.github.io/procedural-planet/)
 To display the Procedural Planet open index.html in a Web browser as Firefox/Chrome/Edge...
 
@@ -107,3 +108,4 @@ Function used to create Procedural "Perlin Noise" Textures. (used for static clo
 
 ###index.html
 Contains the HTML5 canvas for WebGL and all the vertex and fragment shaders.
+c
