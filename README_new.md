@@ -1,10 +1,12 @@
-#3D Procedural Planet WebGL
+# 3D Procedural Planet WebGL
 - - -
-[Imgur](http://i.imgur.com/3MAGabc.jpg)
-###[Try the Demo!](https://prolearner.github.io/procedural-planet/)
+![Imgur](http://i.imgur.com/3MAGabc.jpg)
+
+### [Try the Demo!](https://prolearner.github.io/procedural-planet/)
 To display the Procedural Planet open index.html in a Web browser as Firefox/Chrome/Edge...
 
 List of Files:
+
 
 * js
 	* main.js
@@ -18,7 +20,7 @@ List of Files:
 
 * index.html
 
-###main.js
+### main.js
 Main javascript file in which there are the parameters' definitions and the initialization of the WebGL environment.
 
 **Global Parameters**
@@ -66,7 +68,7 @@ or QTGPU=true if we want LOD in GPU.
 
 Finally all the 5 meshes are inserted into the scene and rendered with the animate() function.
 
-###GradientNoise.js
+### GradientNoise.js
 Contains all the variable and methods for "Perlin Based" Noise. you can choose the method changing the first 2
 variables of the file:
 
@@ -74,10 +76,10 @@ variables of the file:
 - `intFunction:` indicates the interpolation used in the noise function. It can be "tricosine" for the classic Perlin Noise or "simplex" for the more efficient Simplex noise.
 - `nOctaves:` number of noise levels for Fractional Brownian Motion.
 
-###DiamondSquare.js
+### DiamondSquare.js
 Contains all the variables and methods for the Diamond-Square Noise.
 
-###materials.js
+### materials.js
 Contains all the variables and methods for textures.
 
 + `getMaterial()`
@@ -99,13 +101,13 @@ Contains all the variables and methods for textures.
 + `getCloudsMaterialArray()`
     Same as getMaterialArray() but used for clouds.
 
-###quadTree.js
+### quadTree.js
 Contains all the variable and methods for Level of Detail based on Chunked LOD.
 some parameter can be modified as the number of persistent levels in the tree, the quad-tree depth and the chunk size.
 
 ### shader/material.js
 Function used to create Procedural "Perlin Noise" Textures. (used for static clouds and procedural terrain textures)
 
-###index.html
+### index.html
 Contains the HTML5 canvas for WebGL and all the vertex and fragment shaders.
 c
