@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Three.js App</title>
+    <meta charset="utf-8">
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+    <script type="x-shader/x-vertex" id="vertexShader">
+    uniform vec3 lightPosition;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying float vMax;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+    varying vec3 cameraVector;
+
+
+    // chunk(shadowmap_pars_vertex);
+    void main( void ) {
+        vUv = uv;
+        vPosition01 = normalize(position)/2.0 + vec3(0.5,0.5,0.5);
+        vPosition = position;
+        lightDirection = normalize(normalMatrix*lightPosition - vPosition);
+        cameraVector = normalize(normalMatrix*cameraPosition - vPosition);
+        vNormal = normalMatrix*normal;
+        // chunk(shadowmap_vertex);
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+    </script>
+    <script type="x-shader/x-vertex" id="quad_vertexShader">
+    #define PI 3.1415926535897932384626433832795
+
+    uniform vec3 lightPosition;
+    uniform float seed;
+    uniform float roughness;
+    uniform float smoothness;
+    uniform float scale;
+    uniform float amp;
+    uniform float lacunarity;
+    uniform int nOctaves;
+    uniform float resolution;
+    uniform float vRadius;
+
+    uniform float d;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying float vMax;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+    varying vec3 cameraVector;
+
+    const int levels = 16; // hardCoded number of levels
+
+    int mod(int x, int m) {
+      return int(mod(float(x), float(m)));
+    }
+
+    float random5(vec3 co) {
+      return fract(sin(dot(co.xyz ,vec3(12.9898,78.233,1.23456))) * (5356.5453+seed*1234.876));
+    }
+
+
+    float random4(float x, float y, float z) {
+      return random5(vec3(x, y, z));
+    }
+
+    float random4(int x, int y, int z) {
+      return random4(float(x), float(y), float(z));
+    }
+
+    float interpolation(float a, float b, float x) {
+      float ft = x * 3.1415927;
+      float f = (1.0 - cos(ft)) * 0.5;
+      return a*(1.0-f) + b*f;
+    }
+
+    float tricosine(vec3 coordFloat) {
+      vec3 coord0 = vec3(floor(coordFloat.x), floor(coordFloat.y), floor(coordFloat.z));
+      vec3 coord1 = vec3(coord0.x+1.0, coord0.y+1.0, coord0.z+1.0);
+      float xd = (coordFloat.x - coord0.x)/max(1.0, (coord1.x-coord0.x));
+      float yd = (coordFloat.y - coord0.y)/max(1.0, (coord1.y-coord0.y));
+      float zd = (coordFloat.z - coord0.z)/max(1.0, (coord1.z-coord0.z));
+      float c00 = interpolation(random4(coord0.x, coord0.y, coord0.z), random4(coord1.x, coord0.y, coord0.z), xd);
+      float c10 = interpolation(random4(coord0.x, coord1.y, coord0.z), random4(coord1.x, coord1.y, coord0.z), xd);
+      float c01 = interpolation(random4(coord0.x, coord0.y, coord1.z), random4(coord1.x, coord0.y, coord1.z), xd);
+      float c11 = interpolation(random4(coord0.x, coord1.y, coord1.z), random4(coord1.x, coord1.y, coord1.z), xd);
+      float c0 = interpolation(c00, c10, yd);
+      float c1 = interpolation(c01, c11, yd);
+      float c = interpolation(c0, c1, zd);
+
+      return c;
+    }
+
+    float nearestNeighbour(vec3 coordFloat) {
+      return random4(int(floor(coordFloat.x)), int(floor(coordFloat.y)), int(floor(coordFloat.z)));
+    }
+
+    float helper(float x, float y, float z, float resolution) {
+      x = (x+1.0)/2.0*resolution;
+      y = (y+1.0)/2.0*resolution;
+      z = (z+1.0)/2.0*resolution;
+
+      vec3 coordFloat = vec3(x, y, z);
+      float interpolated = tricosine(coordFloat);
+      //float interpolated = nearestNeighbour(coordFloat);
+      return interpolated;
+    }
+
+
+    float perlinNoise(float x, float y, float z, float minRes, float lacunarity, float smoothness, float amp) {
+      float c = 0.0;
+      float res = minRes;
+      float a = amp;
+      for(int l = 0; l < levels; l++) {
+        res = res*lacunarity;
+        float noise = helper(x, y, z, res);
+        c += noise*a;
+        a/=smoothness;
+      }
+      return c*2.0-1.0;
+    }
+
+    float ridgedNoise(float x, float y, float z, float minRes, float lacunarity, float smoothness, float amp) {
+      float c = 0.0;
+      float weight = 1.0;
+      float gain = 2.0;
+      float res = minRes;
+      float a = amp;
+      for(int l = 0; l < levels; l++) {
+        res = res*lacunarity;
+        float noise = helper(x, y, z, res);
+
+        //Make the ridges
+        noise = abs(noise*2.0 -1.0);
+        noise = (1.0-noise);
+        noise*=noise;
+        noise*=weight;
+
+        //update the weights
+        weight = clamp(noise*gain,0.0,1.0);
+
+        c += noise*a;
+        a/=smoothness;
+      }
+      return c*2.0-1.0;
+    }
+
+    float getHeight(vec3 position, float resolution, float scale){
+      vec3 w = normalize(position)*resolution;
+      return ridgedNoise(w.x,w.y,w.z, scale, lacunarity, smoothness, amp);
+    }
+
+    float atan2( float y, float x) {
+        float s = abs(x) > abs(y)?0.0:1.0;
+        float v= mix(PI/2.0 - atan(x,y), atan(y,x), s);
+        return v;
+    }
+
+    vec3 getVector(float r, float t, float g){
+      float x = r*sin(t)*cos(g);
+      float y = r*sin(t)*sin(g);
+      float z = r*cos(t);
+      return vec3(x,y,z);
+    }
+
+
+    vec3 getNormal(vec3 position, vec3 p1, float d){
+      float radius = length(position);
+      float theta = acos(position.z/radius);
+      float gamma = atan2(position.y, position.x);
+
+
+      //float dt = theta+d > PI/2.0?-d:d;
+      //float dg = gamma+d > PI/2.0?-d:d;
+
+      vec3 wt = getVector(1.0, theta+d, gamma)*radius;
+      vec3 wg = getVector(1.0, theta, gamma+d)*radius;
+
+      float ht = getHeight(wt, resolution, scale);
+      float hg = getHeight(wt, resolution, scale);
+      wt += normalize(wt)*ht*roughness;
+      wg += normalize(wg)*ht*roughness;
+
+      vec3 wtgrad = wt - p1;
+      vec3 wggrad = wg - p1;
+
+      return normalize(cross(wtgrad,wggrad));
+    }
+
+
+    // chunk(shadowmap_pars_vertex);
+    void main( void ) {
+        float height = getHeight(normalize(position)*vRadius, resolution, scale);
+        vUv = uv;
+        vPosition = normalize(position)*vRadius + normalize(position)*height*roughness;
+        //vPosition = position;
+        vPosition01 = normalize(vPosition)/2.0 + vec3(0.5,0.5,0.5);
+        lightDirection = normalize(normalMatrix*lightPosition - vPosition);
+        cameraVector = normalize(normalMatrix*cameraPosition - vPosition);
+
+        float dist = length(cameraVector);
+        float l = float(ceil(log2(10.0*length(position)/dist)));
+        float hsl = 1.0/32.0/pow(2.0,l);
+        vec3 n1 = getNormal(normalize(position)*vRadius, vPosition, hsl*length(position));
+        vNormal = normalMatrix*n1;
+        //vNormal = normalMatrix*normal;
+        // chunk(shadowmap_vertex);
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(vPosition, 1.0);
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="fragmentShader">
+    #ifdef GL_ES
+    precision highp float;
+    #endif
+
+    uniform sampler2D tex_sand;
+    uniform sampler2D tex_grass;
+    uniform sampler2D tex_stone;
+    uniform sampler2D tex_snow;
+    uniform float vMax;
+    uniform float vRadius;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+    varying vec3 cameraVector;
+
+    uniform vec3 lightPosition;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+
+    // chunk(shadowmap_pars_fragment);
+
+    void main(void)
+    {
+        // in wNorm is the world-space normal of the fragment
+        vec3 blending = abs(vPosition);
+        blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+        float b = (blending.x + blending.y + blending.z);
+        blending /= vec3(b, b, b);
+
+        vec4 vec_sandx = texture2D(tex_sand, vPosition01.yz);
+        vec4 vec_grassx = texture2D(tex_grass, vPosition01.yz);
+        vec4 vec_stonex = texture2D(tex_stone, vPosition01.yz);
+        vec4 vec_snowx = texture2D(tex_snow, vPosition01.yz);
+        vec4 vec_sandy = texture2D(tex_sand, vPosition01.xz);
+        vec4 vec_grassy = texture2D(tex_grass, vPosition01.xz);
+        vec4 vec_stoney = texture2D(tex_stone, vPosition01.xz);
+        vec4 vec_snowy = texture2D(tex_snow, vPosition01.xz);
+        vec4 vec_sandz = texture2D(tex_sand, vPosition01.xy);
+        vec4 vec_grassz = texture2D(tex_grass, vPosition01.xy);
+        vec4 vec_stonez = texture2D(tex_stone, vPosition01.xy);
+        vec4 vec_snowz = texture2D(tex_snow, vPosition01.xy);
+
+        vec4 vec_sand = vec_sandx * blending.x + vec_sandy * blending.y + vec_sandz * blending.z;
+        vec4 vec_grass = vec_grassx * blending.x + vec_grassy * blending.y + vec_grassz * blending.z;
+        vec4 vec_stone = vec_stonex * blending.x + vec_stoney * blending.y + vec_stonez * blending.z;
+        vec4 vec_snow = vec_snowx * blending.x + vec_snowy * blending.y + vec_snowz * blending.z;
+
+        float offset = length(vPosition) - vRadius;
+        vec4 color = vec_sand; //begin with sand everywhere
+        color = mix( vec_grass, color, smoothstep(vMax*0.25, 0.0, offset));
+        color = mix(vec_stone, color, smoothstep(vMax*0.5, vMax*0.25, offset));
+        color = mix(vec_snow, color,  smoothstep(vMax*0.75, vMax*0.5, offset));
+
+        // simpliest hardcoded lighting
+        //vec3 lightDirection = normalize(lightPosition);
+
+      float c = max(0.1, dot(vNormal, lightDirection))* lightIntensity;
+
+       gl_FragColor = vec4(color.r*c, color.g*c, color.b*c, 1.0)*lightColor;
+        // chunk(shadowmap_fragment);
+
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="water_fragmentShader">
+    #ifdef GL_ES
+    precision highp float;
+    #endif
+
+    uniform sampler2D tex;
+    uniform float vRadius;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+
+
+    uniform vec3 lightPosition;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+    uniform float time;
+
+    // chunk(shadowmap_pars_fragment);
+
+    vec4 getNormal( vec2 uv, float speed ) {
+      float scaleFactor = 0.1;
+      float x1 = uv.x +  sin(time*speed)*scaleFactor;
+      float y1 = uv.y +  cos(time*speed)*scaleFactor;
+      float x2 = uv.x -  sin(time*speed)*scaleFactor;
+      float y2 = uv.y -  cos(time*speed)*scaleFactor;
+      float x3 = uv.x -  sin(time*speed)*scaleFactor;
+      float y3 = uv.y +  cos(time*speed)*scaleFactor;
+      float x4 = uv.x +  sin(time*speed)*scaleFactor;
+      float y4 = uv.y -  cos(time*speed)*scaleFactor;
+      vec4 normal = texture2D(tex, vec2(x1, y2)) + texture2D(tex, vec2(x2, y2)) +
+                    texture2D(tex, vec2(x3, y3)) + texture2D(tex, vec2(x4, y4));
+
+      normal.xyz = normal.xyz/4.0;
+      return normal;
+    }
+
+
+    void main(void)
+    {
+        vec3 blending = abs(vPosition);
+        blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+        float b = (blending.x + blending.y + blending.z);
+        blending /= vec3(b, b, b);
+
+        float speed = 30.0;
+        vec4 vec_texx = getNormal( vPosition01.yz, speed);
+        vec4 vec_texy = getNormal( vPosition01.xz, speed);
+        vec4 vec_texz = getNormal( vPosition01.xy, speed);
+
+        vec4 normalTex = vec_texx * blending.x + vec_texy * blending.y + vec_texz * blending.z;
+
+        float a = max(0.1, dot(normalize((normalTex.rgb*2.0-1.0)+vNormal), lightDirection));
+
+        //vec4 color = vec4(0, 0.6, 0.701,1.0);
+        vec4 color = vec4(0, 0.443, 0.521,1.0);
+        color.xyz = color.xyz*lightIntensity;
+
+        vec4 finalColor = lightColor*color*a;
+
+        gl_FragColor = vec4(finalColor.rgb, 0.75);
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="clouds_fragmentShader">
+    #ifdef GL_ES
+    precision highp float;
+    #endif
+
+    uniform sampler2D tex_clouds;
+    uniform float vRadius;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+
+
+    uniform vec3 lightPosition;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+
+
+
+    void main(void)
+    {
+        vec4 vec_tex = texture2D(tex_clouds, vUv )*1.2;
+        float threshold = 0.6;
+
+        //if(vec_tex.r < threshold) discard;
+        float a = max(0.1, dot(vNormal, lightDirection))*lightIntensity;
+
+        vec4 finalColor = lightColor*(vec_tex)*a;
+        float densityFactor = 1.1; // this value should be > 1.0
+        float alpha = (vec_tex.r-threshold)/(1.0-threshold)*densityFactor;
+        gl_FragColor = vec4(finalColor.rgb, alpha);
+
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="clouds_motion_fragmentShader">
+    varying vec2 vUv;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+    uniform float time;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+    uniform vec3 baseColor;
+    uniform float resolution;
+    uniform float rangeFactor;
+    uniform float smoothness;
+    uniform float seed;
+
+    int mod(int x, int m) {
+      return int(mod(float(x), float(m)));
+    }
+
+    float random5(vec3 co) {
+      return fract(sin(dot(co.xyz ,vec3(12.9898,78.233,1.23456))) * (5356.5453+ seed*1234.7582));
+    }
+
+
+    float random4(float x, float y, float z) {
+      return random5(vec3(x, y, z));
+    }
+
+    float random4(int x, int y, int z) {
+      return random4(float(x), float(y), float(z));
+    }
+
+    float interpolation(float a, float b, float x) {
+      float ft = x * 3.1415927;
+      float f = (1.0 - cos(ft)) * 0.5;
+      return a*(1.0-f) + b*f;
+    }
+
+    float tricosine(vec3 coordFloat) {
+      vec3 coord0 = vec3(floor(coordFloat.x), floor(coordFloat.y), floor(coordFloat.z));
+      vec3 coord1 = vec3(coord0.x+1.0, coord0.y+1.0, coord0.z+1.0);
+      float xd = (coordFloat.x - coord0.x)/max(1.0, (coord1.x-coord0.x));
+      float yd = (coordFloat.y - coord0.y)/max(1.0, (coord1.y-coord0.y));
+      float zd = (coordFloat.z - coord0.z)/max(1.0, (coord1.z-coord0.z));
+      float c00 = interpolation(random4(coord0.x, coord0.y, coord0.z), random4(coord1.x, coord0.y, coord0.z), xd);
+      float c10 = interpolation(random4(coord0.x, coord1.y, coord0.z), random4(coord1.x, coord1.y, coord0.z), xd);
+      float c01 = interpolation(random4(coord0.x, coord0.y, coord1.z), random4(coord1.x, coord0.y, coord1.z), xd);
+      float c11 = interpolation(random4(coord0.x, coord1.y, coord1.z), random4(coord1.x, coord1.y, coord1.z), xd);
+      float c0 = interpolation(c00, c10, yd);
+      float c1 = interpolation(c01, c11, yd);
+      float c = interpolation(c0, c1, zd);
+
+      return c;
+    }
+
+    float nearestNeighbour(vec3 coordFloat) {
+      return random4(int(floor(coordFloat.x)), int(floor(coordFloat.y)), int(floor(coordFloat.z)));
+    }
+
+    float helper(float x, float y, float z, float resolution, vec3 offset) {
+      x = offset.x + (x+1.0)/2.0*resolution;
+      y = offset.y + (y+1.0)/2.0*resolution;
+      z = offset.z + (z+1.0)/2.0*resolution;
+
+      vec3 coordFloat = vec3(x, y, z);
+      float interpolated = tricosine(coordFloat);
+      //float interpolated = nearestNeighbour(coordFloat);
+      return interpolated;
+    }
+
+
+    vec3 scalarField(float x, float y, float z, float time, float maxRes, float smoothness) {
+      float c = 0.0;
+      float amp = 0.56;
+      float speed = 3.0;
+      float maxResT = maxRes;
+      for(int l = 6; l > 0; l--) {
+        float res = maxResT/pow(2.0,float(l));
+        float level = helper(x, y, z, res, vec3(sin(time*speed)*5.0, cos(time*speed)*5.0,time*speed));
+        c += level*amp;
+        amp/=smoothness;
+      }
+      if (c > 0.0) c *= 1.15;
+
+      c = clamp(c, 0.0, 1.0);
+
+      return vec3(c, c, c);
+    }
+
+    void main() {
+      vec3 np = normalize(vPosition);
+      vec3 grad = scalarField(np.x, np.y, np.z, time, 512.0, smoothness);
+      vec3 col = vec3(baseColor) +  (grad-0.5)/rangeFactor;
+      vec4 color = vec4(col, 1.0);
+
+      float threshold = 0.6;
+
+      //if(vec_tex.r < threshold) discard;
+      float a = max(0.1, dot(vNormal, lightDirection))*lightIntensity;
+
+      vec4 finalColor = lightColor*(color)*a;
+      float densityFactor = 1.1; // this value should be > 1.0
+      float alpha = (color.r-threshold)/(1.0-threshold)*densityFactor;
+      gl_FragColor = vec4(finalColor.rgb, alpha);
+
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="terrains_fragmentShader">
+    #ifdef GL_ES
+    precision highp float;
+    #endif
+
+    uniform sampler2D tex_sand;
+    uniform sampler2D tex_grass;
+    uniform sampler2D tex_stone;
+    uniform sampler2D tex_snow;
+    uniform float vMax;
+    uniform float vRadius;
+
+    varying vec2 vUv;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+
+
+    uniform vec3 lightPosition;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+
+
+    // chunk(shadowmap_pars_fragment);
+
+    void main(void)
+    {
+      // in wNorm is the world-space normal of the fragment
+
+      vec4 vec_sand = texture2D(tex_sand, vUv);
+      vec4 vec_grass = texture2D(tex_grass, vUv);
+      vec4 vec_stone = texture2D(tex_stone, vUv);
+      vec4 vec_snow = texture2D(tex_snow, vUv);
+
+      float offset = length(vPosition) - vRadius;
+      vec4 color = vec_sand; //begin with sand everywhere
+      color = mix( vec_grass, color, smoothstep(vMax*0.25, 0.0, offset));
+      color = mix(vec_stone, color, smoothstep(vMax*0.5, vMax*0.25, offset));
+      color = mix(vec_snow, color,  smoothstep(vMax*0.75, vMax*0.5, offset));
+
+      // simpliest hardcoded lighting
+      float c = max(0.0, dot(vNormal, lightDirection))* lightIntensity;
+
+      gl_FragColor = vec4(color.r*c, color.g*c, color.b*c, 1.0)*lightColor;
+      // chunk(shadowmap_fragment);
+    }
+    </script>
+    <script type="x-shader/x-fragment" id="atm_fragmentShader">
+    #ifdef GL_ES
+    precision highp float;
+    #endif
+
+    uniform sampler2D tex_clouds;
+    uniform float vRadius;
+
+    varying vec2 vUv;
+    varying vec3 vPosition01;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec3 lightDirection;
+    varying vec3 cameraVector;
+
+    uniform vec3 lightPosition;
+    uniform vec4 lightColor;
+    uniform float lightIntensity;
+
+
+    void main(void)
+    {
+        float reflect = pow( 0.8- dot( vNormal, vec3( 0.0, 0.0, 1.0 ) ),8.0 );
+        //if(vec_tex.r < threshold) discard;
+        float a = max(0.0, dot(vNormal, lightDirection))*lightIntensity;
+        vec4 color = vec4(0.078, 0.227, 0.341,0.9);
+        gl_FragColor = color* (reflect)*a;
+
+    }
+    </script>
+</head>
+
+<body>
+    <script src="lib/three.min.js"></script>
+    <script src="lib/OrbitControls.js"></script>
+
+    <script src="js/Utils.js"></script>
+    <script src="shader/material.js"></script>
+    <script src="js/DiamondSquare.js"></script>
+    <script src="js/GradientNoise.js"></script>
+    <script src="js/QuadTree.js"></script>
+    <script src="js/materials.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
