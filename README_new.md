@@ -7,7 +7,6 @@ To display the Procedural Planet open index.html in a Web browser as Firefox/Chr
 
 List of Files:
 
-
 * js
 	* main.js
 	* GradientNoise.js
