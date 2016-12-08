@@ -1,5 +1,5 @@
 # 3D Procedural Planet WebGL
-- - -
+
 ![Imgur](http://i.imgur.com/3MAGabc.jpg)
 
 ### [Try the Demo!](https://prolearner.github.io/procedural-planet/)
