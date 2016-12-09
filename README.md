@@ -8,16 +8,16 @@ To display the Procedural Planet open index.html in a Web browser as Firefox/Chr
 List of Files:
 
 * js
-	* main.js
-	* GradientNoise.js
-	* DiamondSquare.js
-	* materials.js
-	* quadTree.js
-	* Utils.js
+	* `main.js`
+	* `GradientNoise.js`
+	* `DiamondSquare.js`
+	* `materials.js`
+	* `quadTree.js`
+	* `Utils.js`
 * shader
-	* material.js
+	* `material.js`
 
-* index.html
+* `index.html`
 
 ### main.js
 Main javascript file in which there are the parameters' definitions and the initialization of the WebGL environment.
@@ -103,6 +103,10 @@ Contains all the variables and methods for textures.
 ### quadTree.js
 Contains all the variable and methods for Level of Detail based on Chunked LOD.
 some parameter can be modified as the number of persistent levels in the tree, the quad-tree depth and the chunk size.
+
+### Utils.js
+Contains utility functions as `getMax()` or `getMin()` and to transform
+the geometries.
 
 ### shader/material.js
 Function used to create Procedural "Perlin Noise" Textures. (used for static clouds and procedural terrain textures)
