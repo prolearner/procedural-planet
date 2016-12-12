@@ -117,8 +117,6 @@ var mesh = new THREE.Mesh(geometry, getMaterial(directionalLight));
 //using perlin Noise Textures
 //var mesh = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(getMaterialArray(directionalLight)));
 
-
-
 if(CLOD){
    var qMaterial = QTGPU?getQuadMaterial(directionalLight , seed, roughness, smoothness, scale, lacunarity, 16, 1, 0.001): //quadtree QTGPU
                        getMaterial(directionalLight); //quadtree CPU
