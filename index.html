@@ -29,11 +29,10 @@
         vUv = uv;
         vPosition01 = normalize(position)/2.0 + vec3(0.5,0.5,0.5);
         vPosition = position;
-        lightDirection = normalize(normalMatrix*lightPosition - vPosition);
+        lightDirection = normalize(lightPosition - vPosition);
         cameraVector = normalize(normalMatrix*cameraPosition - vPosition);
-        vNormal = normalMatrix*normal;
+        vNormal = normal;
         // chunk(shadowmap_vertex);
-
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
     </script>
@@ -249,8 +248,9 @@
     void main(void)
     {
         // in wNorm is the world-space normal of the fragment
-        vec3 blending = abs(vPosition);
-        blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+        vec3 blending = abs(vNormal);
+        blending = (blending - 0.2) * 7.0;
+        blending = max(blending, 0.0); // Force weights to sum to 1.0
         float b = (blending.x + blending.y + blending.z);
         blending /= vec3(b, b, b);
 
@@ -284,6 +284,8 @@
       float c = max(0.1, dot(vNormal, lightDirection))* lightIntensity;
 
        gl_FragColor = vec4(color.r*c, color.g*c, color.b*c, 1.0)*lightColor;
+       //gl_FragColor = vec4(vNormal, 1.0); DEBUG
+
         // chunk(shadowmap_fragment);
 
     }
@@ -330,8 +332,9 @@
 
     void main(void)
     {
-        vec3 blending = abs(vPosition);
-        blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+        vec3 blending = abs(vNormal);
+        blending = (blending - 0.2) * 7.0;
+        blending = max(blending, 0.0); // Force weights to sum to 1.0
         float b = (blending.x + blending.y + blending.z);
         blending /= vec3(b, b, b);
 
@@ -342,7 +345,7 @@
 
         vec4 normalTex = vec_texx * blending.x + vec_texy * blending.y + vec_texz * blending.z;
 
-        float a = max(0.1, dot(normalize((normalTex.rgb*2.0-1.0)+vNormal), lightDirection));
+        float a = max(0.1, dot(normalize((normalTex.rgb+vNormal)/2.0 -0.3), lightDirection));
 
         //vec4 color = vec4(0, 0.6, 0.701,1.0);
         vec4 color = vec4(0, 0.443, 0.521,1.0);
@@ -350,7 +353,7 @@
 
         vec4 finalColor = lightColor*color*a;
 
-        gl_FragColor = vec4(finalColor.rgb, 0.75);
+        gl_FragColor = vec4(finalColor.xyz, 0.75);
     }
     </script>
     <script type="x-shader/x-fragment" id="clouds_fragmentShader">
