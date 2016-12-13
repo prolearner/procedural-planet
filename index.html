@@ -345,8 +345,8 @@
 
         vec4 normalTex = vec_texx * blending.x + vec_texy * blending.y + vec_texz * blending.z;
 
-        float a = max(0.1, dot(normalize((normalTex.rgb+vNormal)/2.0 -0.3), lightDirection));
-
+        float a = max(0.1, dot(( (normalTex.rgb*2.0-1.0)+vNormal)/2.0, lightDirection));
+        
         //vec4 color = vec4(0, 0.6, 0.701,1.0);
         vec4 color = vec4(0, 0.443, 0.521,1.0);
         color.xyz = color.xyz*lightIntensity;
