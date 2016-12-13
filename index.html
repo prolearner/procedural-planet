@@ -249,8 +249,12 @@
     {
         // in wNorm is the world-space normal of the fragment
         vec3 blending = abs(vNormal);
+<<<<<<< HEAD
         blending = (blending - 0.2) * 7.0;
         blending = max(blending, 0.0); // Force weights to sum to 1.0
+=======
+        blending = normalize(max(blending, 0.00001)); // Force weights to sum to 1.0
+>>>>>>> 40b854a42a2ad8e267b82d93743c094e9fb56c1f
         float b = (blending.x + blending.y + blending.z);
         blending /= vec3(b, b, b);
 
